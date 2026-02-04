@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DermaAI Vision | Diagnóstico Dermatológico Inteligente</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- Fondo animado -->
+    <div class="background-animation">
+        <div class="gradient-orb orb-1"></div>
+        <div class="gradient-orb orb-2"></div>
+        <div class="gradient-orb orb-3"></div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" stroke="currentColor"
+                        stroke-width="2" />
+                    <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <circle cx="12" cy="12" r="3" fill="currentColor" />
+                </svg>
+            </div>
+            <div class="logo-text">
+                <h1>DermaAI Vision</h1>
+                <span>Diagnóstico Dermatológico Inteligente</span>
+            </div>
+        </div>
+        <div class="header-status">
+            <div class="status-indicator" id="serverStatus">
+                <span class="status-dot"></span>
+                <span class="status-text">Conectando...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Panel de Entrada -->
+        <section class="input-panel glass-card">
+            <div class="panel-header">
+                <h2>📷 Captura de Imagen</h2>
+                <p>Usa tu cámara o sube una imagen para analizar</p>
+            </div>
+
+            <!-- Tabs para cambiar entre cámara y upload -->
+            <div class="input-tabs">
+                <button class="tab-btn active" data-tab="camera">
+                    <span class="tab-icon">📹</span>
+                    Cámara
+                </button>
+                <button class="tab-btn" data-tab="upload">
+                    <span class="tab-icon">📁</span>
+                    Subir Archivo
+                </button>
+            </div>
+
+            <!-- Contenido de la pestaña de cámara -->
+            <div class="tab-content active" id="tab-camera">
+                <div class="camera-container">
+                    <video id="cameraPreview" autoplay playsinline></video>
+                    <canvas id="cameraCanvas" style="display: none;"></canvas>
+                    <div class="camera-overlay" id="cameraOverlay">
+                        <span>Cámara no iniciada</span>
+                    </div>
+                </div>
+                <div class="camera-controls">
+                    <button class="btn btn-primary" id="btnStartCamera">
+                        <span>🎥</span> Iniciar Cámara
+                    </button>
+                    <button class="btn btn-success" id="btnCapture" disabled>
+                        <span>📸</span> Capturar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Contenido de la pestaña de upload -->
+            <div class="tab-content" id="tab-upload">
+                <div class="upload-zone" id="uploadZone">
+                    <div class="upload-icon">📤</div>
+                    <p>Arrastra una imagen aquí o haz clic para seleccionar</p>
+                    <span class="upload-hint">Formatos: JPG, PNG, WEBP</span>
+                    <input type="file" id="fileInput" accept="image/*" hidden>
+                </div>
+                <div class="preview-container" id="previewContainer" style="display: none;">
+                    <img id="previewImage" alt="Preview">
+                    <button class="btn btn-secondary" id="btnClearPreview">
+                        ✕ Eliminar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Botón de Análisis -->
+            <button class="btn btn-analyze" id="btnAnalyze" disabled>
+                <span class="btn-icon">🔬</span>
+                <span class="btn-text">Analizar Imagen</span>
+                <div class="btn-loader" style="display: none;">
+                    <div class="spinner"></div>
+                </div>
+            </button>
+        </section>
+
+        <!-- Panel de Resultados -->
+        <section class="results-panel glass-card" id="resultsPanel">
+            <div class="panel-header">
+                <h2>📊 Resultados del Análisis</h2>
+                <p id="analysisTimestamp">Esperando imagen...</p>
+            </div>
+
+            <!-- Estado inicial -->
+            <div class="results-placeholder" id="resultsPlaceholder">
+                <div class="placeholder-icon">🔬</div>
+                <p>Los resultados del análisis aparecerán aquí</p>
+            </div>
+
+            <!-- Resultados -->
+            <div class="results-content" id="resultsContent" style="display: none;">
+
+                <!-- Diagnóstico Principal -->
+                <div class="diagnosis-card" id="diagnosisCard">
+                    <div class="diagnosis-header">
+                        <span class="diagnosis-label">Diagnóstico Principal</span>
+                        <span class="diagnosis-confidence" id="diagnosisConfidence">--</span>
+                    </div>
+                    <h3 class="diagnosis-name" id="diagnosisName">--</h3>
+                    <div class="diagnosis-risk" id="diagnosisRisk">
+                        <span class="risk-badge">--</span>
+                    </div>
+                </div>
+
+                <!-- Decisión de Escalamiento -->
+                <div class="escalation-card" id="escalationCard">
+                    <div class="escalation-header">
+                        <span class="escalation-icon" id="escalationIcon">🤖</span>
+                        <span class="escalation-label">Decisión del Agente RL</span>
+                    </div>
+                    <div class="escalation-decision" id="escalationDecision">
+                        <span class="decision-text">--</span>
+                    </div>
+                    <p class="escalation-reason" id="escalationReason">--</p>
+                </div>
+
+                <!-- Recomendación -->
+                <div class="recommendation-card" id="recommendationCard">
+                    <div class="recommendation-header">
+                        <span class="recommendation-urgency" id="recommendationUrgency">--</span>
+                    </div>
+                    <p class="recommendation-text" id="recommendationText">--</p>
+                </div>
+
+                <!-- Distribución de Probabilidades -->
+                <div class="probabilities-card">
+                    <h4>Distribución de Probabilidades</h4>
+                    <div class="probabilities-list" id="probabilitiesList">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>DermaAI Vision © 2024 | Sistema experimental - No reemplaza consulta médica profesional</p>
+        <div class="footer-tech">
+            <span>🧠 MobileNetV2</span>
+            <span>🤖 DQN Agent</span>
+            <span>⚡ TensorFlow</span>
+        </div>
+    </footer>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
