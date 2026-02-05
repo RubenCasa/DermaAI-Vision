@@ -31,7 +31,11 @@ CORS(app)
 # Variables globales para los modelos
 cnn_model = None
 rl_agent = None
+unet_model = None
 class_info = None
+
+# Tamaño para modelo U-Net
+UNET_SIZE = (128, 128)
 
 # ============================================
 # CONFIGURACIÓN
@@ -148,6 +152,15 @@ def load_models():
             print(f"✅ Agente RL cargado")
         else:
             print(f"⚠️ Agente RL no encontrado. Usando reglas heurísticas.")
+        
+        # Cargar modelo U-Net para segmentación
+        global unet_model
+        unet_path = os.path.join(MODELS_DIR, 'unet_segmentation_model.keras')
+        if os.path.exists(unet_path):
+            unet_model = keras.models.load_model(unet_path, compile=False)
+            print(f"✅ Modelo U-Net cargado")
+        else:
+            print(f"⚠️ Modelo U-Net no encontrado. Mejora de imágenes no disponible.")
         
         print("✅ Modelos listos!")
         return True
@@ -337,6 +350,137 @@ def predict():
     
     except Exception as e:
         print(f"❌ Error en predicción: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================
+# FUNCIONES DE MEJORA DE IMAGEN
+# ============================================
+
+def remove_shadows(img_array):
+    """Elimina sombras usando filtrado homomórfico."""
+    import cv2
+    img = (img_array * 255).astype(np.uint8)
+    
+    # Convertir a float y aplicar log
+    img_float = img.astype(np.float64) + 1
+    img_log = np.log(img_float)
+    
+    # Aplicar filtro Gaussiano en cada canal
+    result = np.zeros_like(img_float)
+    for i in range(3):
+        low_freq = cv2.GaussianBlur(img_log[:,:,i], (21, 21), 0)
+        high_freq = img_log[:,:,i] - low_freq
+        result[:,:,i] = np.exp(high_freq + np.mean(low_freq))
+    
+    result = np.clip(result, 0, 255).astype(np.uint8)
+    return result / 255.0
+
+
+def enhance_contrast(img_array):
+    """Mejora el contraste usando CLAHE."""
+    import cv2
+    img = (img_array * 255).astype(np.uint8)
+    lab = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    lab[:,:,0] = clahe.apply(lab[:,:,0])
+    enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+    return enhanced / 255.0
+
+
+@app.route('/api/enhance', methods=['POST'])
+def enhance_image():
+    """
+    Mejora una imagen usando segmentación U-Net y técnicas de procesamiento.
+    
+    Acepta:
+        - image_base64: Imagen en formato base64
+    
+    Retorna:
+        - original: Imagen original en base64
+        - enhanced: Imagen mejorada en base64
+        - mask: Máscara de segmentación en base64
+        - segmented: Imagen segmentada en base64
+    """
+    try:
+        import cv2
+        
+        # Obtener imagen
+        if 'image_base64' not in request.json:
+            return jsonify({'error': 'No se proporcionó imagen'}), 400
+        
+        image_data = request.json['image_base64']
+        if ',' in image_data:
+            image_data = image_data.split(',')[1]
+        image_bytes = base64.b64decode(image_data)
+        image = Image.open(BytesIO(image_bytes))
+        
+        # Convertir a RGB
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        # Redimensionar para U-Net
+        original_size = image.size
+        img_unet = image.resize(UNET_SIZE)
+        img_array = np.array(img_unet) / 255.0
+        
+        # Inicializar variables de salida
+        mask_binary = None
+        segmented_array = None
+        
+        # Generar máscara con U-Net si está disponible
+        if unet_model is not None:
+            img_batch = np.expand_dims(img_array, axis=0)
+            mask = unet_model.predict(img_batch, verbose=0)[0].squeeze()
+            mask_binary = (mask > 0.5).astype(np.float32)
+        else:
+            # Fallback: usar Otsu thresholding
+            gray = cv2.cvtColor((img_array * 255).astype(np.uint8), cv2.COLOR_RGB2GRAY)
+            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+            _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+            mask_binary = thresh / 255.0
+        
+        # Aplicar mejoras
+        img_no_shadows = remove_shadows(img_array)
+        img_enhanced = enhance_contrast(img_no_shadows)
+        
+        # Aplicar máscara
+        mask_3d = np.expand_dims(mask_binary, axis=-1)
+        segmented_array = img_enhanced * mask_3d
+        
+        # Convertir a base64
+        def array_to_base64(arr):
+            arr_uint8 = (np.clip(arr, 0, 1) * 255).astype(np.uint8)
+            img_pil = Image.fromarray(arr_uint8)
+            img_pil = img_pil.resize(original_size)
+            buffer = BytesIO()
+            img_pil.save(buffer, format='PNG')
+            return base64.b64encode(buffer.getvalue()).decode('utf-8')
+        
+        def mask_to_base64(m):
+            m_uint8 = (m * 255).astype(np.uint8)
+            img_pil = Image.fromarray(m_uint8)
+            img_pil = img_pil.resize(original_size)
+            buffer = BytesIO()
+            img_pil.save(buffer, format='PNG')
+            return base64.b64encode(buffer.getvalue()).decode('utf-8')
+        
+        response = {
+            'success': True,
+            'original': array_to_base64(img_array),
+            'enhanced': array_to_base64(img_enhanced),
+            'mask': mask_to_base64(mask_binary),
+            'segmented': array_to_base64(segmented_array),
+            'unet_available': unet_model is not None,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        print(f"❌ Error en mejora de imagen: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
