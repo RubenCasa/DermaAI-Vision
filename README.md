@@ -23,7 +23,7 @@ Sistema de clasificación de enfermedades dermatológicas con **Inteligencia Art
 ## 📁 Estructura del Proyecto
 
 ```
-PRO_ML/
+
 ├── notebooks/
 │   ├── 01_Train_CNN_Model.ipynb    # Entrenar modelo CNN (Colab)
 │   └── 02_Train_RL_Agent.ipynb     # Entrenar agente RL (Colab)
